@@ -1,6 +1,7 @@
 const STORAGE_KEY = "coinClicker.score";
 const LANGUAGE_KEY = "coinClicker.language";
 const THEME_KEY = "coinClicker.theme";
+const SOUND_KEY = "coinClicker.sound";
 
 // Click speed = number of clicks in the last second.
 const SPEED_WINDOW_MS = 1000;
@@ -26,6 +27,15 @@ const MILESTONES = [
 const MESSAGE_DURATION_MS = 3000;
 const CONFETTI_COLORS = ["#ffd54a", "#ffb300", "#fff3b0", "#ff7043", "#66bb6a", "#42a5f5"];
 
+// Sounds are generated in code (no audio files).
+const SOUND_VOLUME = 0.12;
+// The click "bling" is two quick notes, B5 then E6, like a coin pickup.
+const CLICK_NOTE_HZ = 988;
+// The click sound goes up in pitch as the coin grows, by up to this many semitones at full size.
+const CLICK_PITCH_RISE_SEMITONES = 7;
+// Goal jingle: C6, E6, G6, C7.
+const MILESTONE_NOTES_HZ = [1047, 1319, 1568, 2093];
+
 const TRANSLATIONS = {
   en: {
     pageTitle: "Coin Clicker",
@@ -36,6 +46,8 @@ const TRANSLATIONS = {
     languageLabel: "Language",
     switchToLight: "Switch to light theme",
     switchToDark: "Switch to dark theme",
+    soundOff: "Turn sound off",
+    soundOn: "Turn sound on",
     nextGoal: "Next goal: {goal} · {left} to go",
     allGoalsReached: "All goals reached!",
     milestone100: "Nice start!",
@@ -52,6 +64,8 @@ const TRANSLATIONS = {
     languageLabel: "Язык",
     switchToLight: "Включить светлую тему",
     switchToDark: "Включить тёмную тему",
+    soundOff: "Выключить звук",
+    soundOn: "Включить звук",
     nextGoal: "Следующая цель: {goal} · осталось {left}",
     allGoalsReached: "Все цели достигнуты!",
     milestone100: "Отличное начало!",
@@ -65,6 +79,7 @@ const scoreEl = document.getElementById("score");
 const coinEl = document.getElementById("coin");
 const resetEl = document.getElementById("reset");
 const themeToggleEl = document.getElementById("theme-toggle");
+const soundToggleEl = document.getElementById("sound-toggle");
 const progressTextEl = document.getElementById("progress-text");
 const progressTrackEl = document.getElementById("progress-track");
 const milestoneLayerEl = document.getElementById("milestone-layer");
@@ -78,11 +93,14 @@ let score = loadScore();
 let language = loadLanguage();
 // The inline script in <head> has already chosen the starting theme.
 let theme = document.documentElement.dataset.theme;
+let soundOn = loadSound();
+let audioContext = null;
 let recentClicks = [];
 let coinSizeFrame = null;
 let messageTimer = null;
 applyLanguage();
 applyTheme();
+applySound();
 renderScore();
 
 coinEl.addEventListener("click", (event) => {
@@ -95,6 +113,7 @@ coinEl.addEventListener("click", (event) => {
   saveScore();
   showFloatingPoints(event, points);
   updateCoinSize();
+  playClickSound(coinGrowth());
   celebrateMilestones(previousScore, score);
 });
 
@@ -124,6 +143,14 @@ themeToggleEl.addEventListener("click", () => {
   applyTheme();
 });
 
+soundToggleEl.addEventListener("click", () => {
+  soundOn = !soundOn;
+  saveSound();
+  applySound();
+  // A little bling so the player hears that sound is back on.
+  playClickSound(0);
+});
+
 // Until the player picks a theme, keep following the system setting.
 systemDarkQuery.addEventListener("change", (event) => {
   if (hasSavedTheme()) return;
@@ -143,11 +170,15 @@ function pointsForSpeed(speed) {
   return Math.min(1 + Math.floor(speed / CLICKS_PER_BONUS_POINT), MAX_POINTS_PER_CLICK - 1);
 }
 
-function updateCoinSize() {
+// How grown the coin is right now: 0 = starting size, 1 = full size.
+function coinGrowth() {
   // A single click (speed 1) keeps the starting size; growth starts from the second click in a second.
   const linearProgress = Math.min(Math.max(currentSpeed() - 1, 0) / (MAX_SPEED - 1), 1);
-  const progress = linearProgress ** GROWTH_CURVE;
-  coinEl.style.setProperty("--speed-scale", String(1 + (MAX_COIN_SCALE - 1) * progress));
+  return linearProgress ** GROWTH_CURVE;
+}
+
+function updateCoinSize() {
+  coinEl.style.setProperty("--speed-scale", String(1 + (MAX_COIN_SCALE - 1) * coinGrowth()));
 
   // Keep re-checking while recent clicks remain, so the coin shrinks back once clicking slows or stops.
   cancelAnimationFrame(coinSizeFrame);
@@ -208,7 +239,10 @@ function celebrateMilestones(previousScore, newScore) {
   const passed = MILESTONES.filter(
     (milestone) => previousScore < milestone.points && newScore >= milestone.points
   );
-  if (passed.length > 0) showMilestoneMessage(passed[passed.length - 1]);
+  if (passed.length > 0) {
+    showMilestoneMessage(passed[passed.length - 1]);
+    playMilestoneSound();
+  }
 }
 
 function showMilestoneMessage(milestone) {
@@ -253,6 +287,63 @@ function launchConfetti(count) {
   }
 }
 
+// growth: 0 = starting size, 1 = full size (higher pitch).
+function playClickSound(growth) {
+  const context = getAudioContext();
+  if (!context) return;
+
+  const now = context.currentTime;
+  const firstNote = CLICK_NOTE_HZ * 2 ** ((growth * CLICK_PITCH_RISE_SEMITONES) / 12);
+  playTone(context, firstNote, now, 0.07);
+  // Second note a fourth higher (B5 → E6).
+  playTone(context, firstNote * (4 / 3), now + 0.06, 0.16);
+}
+
+function playMilestoneSound() {
+  const context = getAudioContext();
+  if (!context) return;
+
+  // Start just after the click sound so the two don't blur together.
+  const start = context.currentTime + 0.12;
+  MILESTONE_NOTES_HZ.forEach((frequency, index) => {
+    const isLastNote = index === MILESTONE_NOTES_HZ.length - 1;
+    playTone(context, frequency, start + index * 0.09, isLastNote ? 0.4 : 0.14);
+  });
+}
+
+// Returns null when sound is off or the browser can't play generated audio.
+function getAudioContext() {
+  if (!soundOn) return null;
+
+  if (!audioContext) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return null;
+    audioContext = new AudioContextClass();
+  }
+  // Browsers keep audio paused until the player interacts with the page; this runs on a click, so resume.
+  if (audioContext.state === "suspended") audioContext.resume();
+  return audioContext;
+}
+
+function playTone(context, frequency, startTime, duration) {
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+
+  // A triangle wave sounds soft and a little chiptune-cute.
+  oscillator.type = "triangle";
+  oscillator.frequency.setValueAtTime(frequency, startTime);
+
+  // Quick fade in and a smooth fade out, so notes don't click or pop.
+  gain.gain.setValueAtTime(0.0001, startTime);
+  gain.gain.exponentialRampToValueAtTime(SOUND_VOLUME, startTime + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  oscillator.start(startTime);
+  oscillator.stop(startTime + duration + 0.05);
+}
+
 function randomBetween(min, max) {
   return min + Math.random() * (max - min);
 }
@@ -284,8 +375,9 @@ function applyLanguage() {
     button.setAttribute("aria-pressed", String(button.dataset.lang === language));
   });
 
-  // The theme button's label is translated too.
+  // The theme and sound buttons' labels are translated too.
   updateThemeToggleLabel();
+  updateSoundToggleLabel();
 }
 
 function applyTheme() {
@@ -300,6 +392,18 @@ function updateThemeToggleLabel() {
   themeToggleEl.title = label;
 }
 
+function applySound() {
+  soundToggleEl.dataset.sound = soundOn ? "on" : "off";
+  updateSoundToggleLabel();
+}
+
+function updateSoundToggleLabel() {
+  const strings = TRANSLATIONS[language];
+  const label = soundOn ? strings.soundOff : strings.soundOn;
+  soundToggleEl.setAttribute("aria-label", label);
+  soundToggleEl.title = label;
+}
+
 function hasSavedTheme() {
   try {
     const saved = localStorage.getItem(THEME_KEY);
@@ -312,6 +416,22 @@ function hasSavedTheme() {
 function saveTheme() {
   try {
     localStorage.setItem(THEME_KEY, theme);
+  } catch {
+    // Storage may be unavailable; the choice just won't be remembered.
+  }
+}
+
+function loadSound() {
+  try {
+    return localStorage.getItem(SOUND_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+function saveSound() {
+  try {
+    localStorage.setItem(SOUND_KEY, soundOn ? "on" : "off");
   } catch {
     // Storage may be unavailable; the choice just won't be remembered.
   }

@@ -205,7 +205,8 @@ h1 {
   border-color: var(--selected-background);
 }
 
-.theme-toggle {
+/* Square toolbar buttons with an icon (sound, theme). */
+.icon-button {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -214,7 +215,9 @@ h1 {
 }
 
 :root[data-theme="light"] .icon-sun,
-:root[data-theme="dark"] .icon-moon {
+:root[data-theme="dark"] .icon-moon,
+.sound-toggle[data-sound="on"] .icon-sound-off,
+.sound-toggle[data-sound="off"] .icon-sound-on {
   display: none;
 }
 
