@@ -17,7 +17,9 @@
       document.documentElement.dataset.theme = theme;
     })();
   </script>
-  <link rel="stylesheet" href="style.css">
+  <!-- "?v=" makes browsers download fresh files after an update instead of using old saved copies.
+       Raise the number (here and on script.js at the bottom) whenever style.css or script.js changes. -->
+  <link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
   <div class="toolbar">
@@ -110,6 +112,6 @@
   <!-- Goal celebration messages appear here; screen readers announce them. -->
   <div id="milestone-layer" class="milestone-layer" role="status" aria-live="polite"></div>
 
-  <script src="script.js"></script>
+  <script src="script.js?v=8"></script>
 </body>
 </html>
