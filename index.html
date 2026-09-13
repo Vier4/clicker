@@ -85,6 +85,17 @@
     </div>
   </dialog>
 
+  <!-- Asks before the Reset button wipes the player's progress. -->
+  <dialog id="reset-dialog" class="confirm-dialog" aria-labelledby="reset-dialog-title" aria-describedby="reset-dialog-text">
+    <h2 id="reset-dialog-title" class="confirm-title" data-i18n="resetTitle">Reset your progress?</h2>
+    <p id="reset-dialog-text" class="confirm-text" data-i18n="resetText">Your score, bonus and all goals will go back to 0. This can't be undone.</p>
+    <div class="confirm-actions">
+      <!-- autofocus: Cancel is the safe default if Enter is pressed by accident. -->
+      <button id="reset-cancel" class="confirm-cancel" type="button" data-i18n="resetCancel" autofocus>Cancel</button>
+      <button id="reset-confirm" class="confirm-reset" type="button" data-i18n="resetConfirm">Reset</button>
+    </div>
+  </dialog>
+
   <!-- Goal celebration messages appear here; screen readers announce them. -->
   <div id="milestone-layer" class="milestone-layer" role="status" aria-live="polite"></div>
 

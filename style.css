@@ -18,6 +18,8 @@
   --surface: #ffffff;
   --muted: #5a5f73;
   --track: rgba(31, 34, 51, 0.12);
+  --danger: #c62828;
+  --danger-text: #ffffff;
 }
 
 :root[data-theme="dark"] {
@@ -34,6 +36,8 @@
   --surface: #23263f;
   --muted: #b8bccf;
   --track: rgba(255, 255, 255, 0.15);
+  --danger: #ff6b6b;
+  --danger-text: #14162a;
 }
 
 html {
@@ -424,7 +428,8 @@ h1 {
   animation: milestone-pop 600ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
 }
 
-.victory::backdrop {
+.victory::backdrop,
+.confirm-dialog::backdrop {
   background: rgba(10, 12, 30, 0.6);
   -webkit-backdrop-filter: blur(3px);
   backdrop-filter: blur(3px);
@@ -484,8 +489,87 @@ h1 {
   }
 }
 
+/* "Reset your progress?" confirmation */
+.confirm-dialog {
+  width: min(360px, calc(100vw - 32px));
+  padding: 24px;
+  text-align: center;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--control-border);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+.confirm-dialog[open] {
+  animation: dialog-in 180ms ease-out both;
+}
+
+.confirm-title {
+  margin: 0 0 8px;
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.confirm-text {
+  margin: 0 0 20px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.confirm-actions button {
+  flex: 1;
+  padding: 10px 16px;
+  font-size: 1rem;
+  font-weight: 700;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.confirm-actions button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.confirm-cancel {
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--control-border);
+}
+
+.confirm-cancel:hover {
+  background: var(--control-hover);
+}
+
+/* Red, so the button that erases progress stands out from Cancel. */
+.confirm-reset {
+  color: var(--danger-text);
+  background: var(--danger);
+  border: 1px solid var(--danger);
+}
+
+.confirm-reset:hover {
+  filter: brightness(1.08);
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
 /* For people who turn off animations: just fade the message in and out (script.js skips the confetti). */
 @media (prefers-reduced-motion: reduce) {
+  .confirm-dialog[open] {
+    animation-name: milestone-fade-in;
+  }
+
   .victory[open] {
     animation-name: milestone-fade-in;
   }

@@ -25,7 +25,7 @@ const MILESTONES = [
   { points: 1000, icon: "🥈", titleKey: "milestone1000", multiplier: 5, confetti: 50 },
   { points: 5000, icon: "🥇", titleKey: "milestone5000", multiplier: 20, confetti: 90 },
   { points: 50000, icon: "🏆", titleKey: "milestone50000", multiplier: 50, confetti: 120 },
-  { points: 100000, icon: "👑", titleKey: "milestone100000", multiplier: 300, confetti: 160 },
+  { points: 100000, icon: "👑", titleKey: "milestone100000", multiplier: 200, confetti: 160 },
   // The final goal: instead of the usual message, it opens the "You beat the game!" screen.
   { points: 1000000, icon: "💎", titleKey: "milestone1000000", multiplier: 500, victory: true },
 ];
@@ -59,6 +59,10 @@ const TRANSLATIONS = {
     score: "Score:",
     coinLabel: "Click the coin",
     reset: "Reset",
+    resetTitle: "Reset your progress?",
+    resetText: "Your score, bonus and all goals will go back to 0. This can't be undone.",
+    resetCancel: "Cancel",
+    resetConfirm: "Reset",
     languageLabel: "Language",
     switchToLight: "Switch to light theme",
     switchToDark: "Switch to dark theme",
@@ -84,6 +88,10 @@ const TRANSLATIONS = {
     score: "Счёт:",
     coinLabel: "Нажмите на монету",
     reset: "Сбросить",
+    resetTitle: "Сбросить прогресс?",
+    resetText: "Счёт, бонус и все цели вернутся к нулю. Это нельзя отменить.",
+    resetCancel: "Отмена",
+    resetConfirm: "Сбросить",
     languageLabel: "Язык",
     switchToLight: "Включить светлую тему",
     switchToDark: "Включить тёмную тему",
@@ -109,6 +117,9 @@ const scoreEl = document.getElementById("score");
 const multiplierEl = document.getElementById("multiplier");
 const coinEl = document.getElementById("coin");
 const resetEl = document.getElementById("reset");
+const resetDialogEl = document.getElementById("reset-dialog");
+const resetCancelEl = document.getElementById("reset-cancel");
+const resetConfirmEl = document.getElementById("reset-confirm");
 const themeToggleEl = document.getElementById("theme-toggle");
 const soundToggleEl = document.getElementById("sound-toggle");
 const progressTextEl = document.getElementById("progress-text");
@@ -159,7 +170,17 @@ coinEl.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && event.repeat) event.preventDefault();
 });
 
+// Reset asks first. Escape or Cancel closes the question without changing anything.
 resetEl.addEventListener("click", () => {
+  // Nothing to lose yet, so there's nothing to ask about.
+  if (score === 0) return;
+  resetDialogEl.showModal();
+});
+
+resetCancelEl.addEventListener("click", () => resetDialogEl.close());
+
+resetConfirmEl.addEventListener("click", () => {
+  resetDialogEl.close();
   score = 0;
   renderScore();
   saveScore();
