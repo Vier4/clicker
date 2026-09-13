@@ -76,7 +76,7 @@
 
   <!-- Opens when the final goal is reached. script.js fills in the text. -->
   <dialog id="victory" class="victory" aria-labelledby="victory-title" aria-describedby="victory-text">
-    <div class="victory-icon" aria-hidden="true">💎</div>
+    <div id="victory-icon" class="victory-icon" aria-hidden="true"></div>
     <h2 id="victory-title" class="victory-title"></h2>
     <p id="victory-text" class="victory-text"></p>
     <span id="victory-bonus" class="milestone-bonus"></span>
@@ -94,6 +94,17 @@
       <button id="reset-cancel" class="confirm-cancel" type="button" data-i18n="resetCancel" autofocus>Cancel</button>
       <button id="reset-confirm" class="confirm-reset" type="button" data-i18n="resetConfirm">Reset</button>
     </div>
+  </dialog>
+
+  <!-- Shown when clicking stays impossibly fast for too long (most likely an auto-clicker). -->
+  <dialog id="rest-dialog" class="rest-dialog" aria-labelledby="rest-title" aria-describedby="rest-text">
+    <div id="rest-card" class="rest-card">
+      <div class="rest-icon" aria-hidden="true">🥵</div>
+      <h2 id="rest-title" class="rest-title" data-i18n="restTitle">Slow down, speed demon!</h2>
+      <p id="rest-text" class="rest-text"></p>
+    </div>
+    <!-- script.js moves this button away from where the clicks were landing. -->
+    <button id="rest-button" class="rest-button" type="button" data-i18n="restButton">I'm rested 😌</button>
   </dialog>
 
   <!-- Goal celebration messages appear here; screen readers announce them. -->

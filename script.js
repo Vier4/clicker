@@ -17,6 +17,14 @@ const CLICKS_PER_BONUS_POINT = 3;
 // Points per click when the coin is at its biggest (MAX_SPEED or faster), before the goal bonus below.
 const MAX_POINTS_PER_CLICK = 5;
 
+// Auto-clicker check: this many clicks per second or more, nonstop for this long, opens the "take a rest"
+// screen. People can't keep that up (very fast human clicking is around 10 a second, in short bursts).
+const EXTREME_SPEED = 15;
+const EXTREME_SPEED_DURATION_MS = 10000;
+// The rest screen's button appears at least this far from where the clicks were landing,
+// so an auto-clicker stuck on one spot can't press it.
+const REST_BUTTON_MIN_DISTANCE_PX = 160;
+
 // Score goals, in order. Reaching one shows a celebration message and multiplies every click's points
 // from then on. Each multiplier replaces the previous one (they don't stack); this keeps the big goals reachable.
 // The progress bar has one segment per goal.
@@ -26,14 +34,27 @@ const MILESTONES = [
   { points: 5000, icon: "🥇", titleKey: "milestone5000", multiplier: 20, confetti: 90 },
   { points: 50000, icon: "🏆", titleKey: "milestone50000", multiplier: 50, confetti: 120 },
   { points: 100000, icon: "👑", titleKey: "milestone100000", multiplier: 200, confetti: 160 },
-  // The final goal: instead of the usual message, it opens the "You beat the game!" screen.
-  { points: 1000000, icon: "💎", titleKey: "milestone1000000", multiplier: 500, victory: true },
+  // The last goals open a victory screen instead of the usual message.
+  {
+    points: 1000000,
+    icon: "💎",
+    titleKey: "milestone1000000",
+    multiplier: 500,
+    victory: { textKey: "victoryText", confettiBursts: 5 },
+  },
+  {
+    points: 10000000,
+    icon: "🚀",
+    titleKey: "milestone10000000",
+    multiplier: 1000,
+    // "Legendary": rainbow border, twice the confetti, and the fanfare plays twice.
+    victory: { textKey: "victoryTwiceText", confettiBursts: 10, legendary: true },
+  },
 ];
 // How long a celebration message stays on screen.
 const MESSAGE_DURATION_MS = 3000;
 const CONFETTI_COLORS = ["#ffd54a", "#ffb300", "#fff3b0", "#ff7043", "#66bb6a", "#42a5f5"];
-// The victory screen fires several rounds of confetti.
-const VICTORY_CONFETTI_BURSTS = 5;
+// Victory screens fire rounds of confetti; how many rounds is set per goal in MILESTONES.
 const VICTORY_CONFETTI_PER_BURST = 80;
 const VICTORY_CONFETTI_INTERVAL_MS = 600;
 // Players are usually tapping fast when the victory screen opens, so its button waits a moment
@@ -51,6 +72,8 @@ const MILESTONE_NOTES_HZ = [1047, 1319, 1568, 2093];
 // Victory fanfare: a rising run (C5 E5 G5 C6 G5 C6), then a held C major chord (C6 E6 G6).
 const VICTORY_RUN_HZ = [523, 659, 784, 1047, 784, 1047];
 const VICTORY_CHORD_HZ = [1047, 1319, 1568];
+// Legendary victory: the run again an octave higher, ending on a bigger chord (C6 E6 G6 C7).
+const VICTORY_ENCORE_CHORD_HZ = [1047, 1319, 1568, 2093];
 
 const TRANSLATIONS = {
   en: {
@@ -81,6 +104,11 @@ const TRANSLATIONS = {
     milestone1000000: "You beat the game!",
     victoryText: "{points} points! You're the ultimate Coin Clicker champion.",
     victoryButton: "Keep clicking",
+    milestone10000000: "You beat it twice!",
+    victoryTwiceText: "{points} points! You're unstoppable!",
+    restTitle: "Slow down, speed demon!",
+    restText: "More than {speed} clicks a second for {seconds} seconds straight. Your finger needs a rest… or is that a robot? 🤖",
+    restButton: "I'm rested 😌",
   },
   ru: {
     pageTitle: "Кликер монет",
@@ -97,7 +125,8 @@ const TRANSLATIONS = {
     switchToDark: "Включить тёмную тему",
     soundOff: "Выключить звук",
     soundOn: "Включить звук",
-    nextGoal: "Следующая цель: {goal} · осталось {left}",
+    // Short, so "Цель: 10 000 000 · осталось 9 000 000" still fits on one line on a phone.
+    nextGoal: "Цель: {goal} · осталось {left}",
     allGoalsReached: "Все цели достигнуты!",
     milestone100: "Отличное начало!",
     milestone1000: "Мастер монет!",
@@ -110,6 +139,11 @@ const TRANSLATIONS = {
     milestone1000000: "Вы прошли игру!",
     victoryText: "{points} очков! Вы — абсолютный чемпион кликера монет.",
     victoryButton: "Кликать дальше",
+    milestone10000000: "Вы прошли игру дважды!",
+    victoryTwiceText: "{points} очков! Вас не остановить!",
+    restTitle: "Помедленнее, торопыга!",
+    restText: "Больше {speed} кликов в секунду {seconds} секунд подряд. Пальцу нужен отдых… или это робот? 🤖",
+    restButton: "Отдых окончен 😌",
   },
 };
 
@@ -126,6 +160,11 @@ const progressTextEl = document.getElementById("progress-text");
 const progressTrackEl = document.getElementById("progress-track");
 const milestoneLayerEl = document.getElementById("milestone-layer");
 const victoryEl = document.getElementById("victory");
+const restDialogEl = document.getElementById("rest-dialog");
+const restCardEl = document.getElementById("rest-card");
+const restTextEl = document.getElementById("rest-text");
+const restButtonEl = document.getElementById("rest-button");
+const victoryIconEl = document.getElementById("victory-icon");
 const victoryTitleEl = document.getElementById("victory-title");
 const victoryTextEl = document.getElementById("victory-text");
 const victoryBonusEl = document.getElementById("victory-bonus");
@@ -143,6 +182,8 @@ let theme = document.documentElement.dataset.theme;
 let soundOn = loadSound();
 let audioContext = null;
 let recentClicks = [];
+// When the current nonstop run of extreme-speed clicking started (null when not clicking that fast).
+let extremeSpeedSince = null;
 let coinSizeFrame = null;
 let messageTimer = null;
 let victoryTimers = [];
@@ -163,6 +204,7 @@ coinEl.addEventListener("click", (event) => {
   updateCoinSize();
   playClickSound(coinGrowth());
   celebrateMilestones(previousScore, score);
+  watchForExtremeSpeed(event);
 });
 
 // Holding Enter makes the browser repeat clicks very fast; only count real key presses.
@@ -209,6 +251,24 @@ soundToggleEl.addEventListener("click", () => {
   playClickSound(0);
 });
 
+restButtonEl.addEventListener("click", () => {
+  restDialogEl.close();
+  // Start the speed count over, so the coin shrinks back and the check starts fresh.
+  recentClicks = [];
+  extremeSpeedSince = null;
+  updateCoinSize();
+});
+
+// Clicks anywhere else on the rest screen just shake the message.
+restDialogEl.addEventListener("click", (event) => {
+  if (event.target === restButtonEl || restCardEl.classList.contains("is-shaking")) return;
+  restCardEl.classList.add("is-shaking");
+});
+restCardEl.addEventListener("animationend", () => restCardEl.classList.remove("is-shaking"));
+
+// Escape doesn't close the rest screen: the player has to find and press the button.
+restDialogEl.addEventListener("cancel", (event) => event.preventDefault());
+
 victoryCloseEl.addEventListener("click", () => {
   victoryEl.close();
   // Clean up right away: the browser's "close" event can arrive later, and until then confetti kept coming.
@@ -235,6 +295,75 @@ function pointsForSpeed(speed) {
   if (speed >= MAX_SPEED) return MAX_POINTS_PER_CLICK;
   // Keep the top reward for full size only.
   return Math.min(1 + Math.floor(speed / CLICKS_PER_BONUS_POINT), MAX_POINTS_PER_CLICK - 1);
+}
+
+function watchForExtremeSpeed(event) {
+  if (currentSpeed() < EXTREME_SPEED) {
+    extremeSpeedSince = null;
+    return;
+  }
+
+  const now = performance.now();
+  if (extremeSpeedSince === null) extremeSpeedSince = now;
+  if (now - extremeSpeedSince >= EXTREME_SPEED_DURATION_MS) showRestScreen(clickPosition(event));
+}
+
+function showRestScreen(clickPoint) {
+  extremeSpeedSince = null;
+  restTextEl.textContent = fillTemplate(TRANSLATIONS[language].restText, {
+    speed: EXTREME_SPEED,
+    seconds: EXTREME_SPEED_DURATION_MS / 1000,
+  });
+  restDialogEl.showModal();
+  placeRestButton(clickPoint);
+}
+
+// Puts the button at a random spot that is away from where the clicks were landing and off the message.
+function placeRestButton(clickPoint) {
+  const margin = 16;
+  const card = restCardEl.getBoundingClientRect();
+  const { width, height } = restButtonEl.getBoundingClientRect();
+
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const left = randomBetween(margin, window.innerWidth - width - margin);
+    const top = randomBetween(margin, window.innerHeight - height - margin);
+    const distance = Math.hypot(left + width / 2 - clickPoint.x, top + height / 2 - clickPoint.y);
+    const clearOfCard =
+      left + width + margin < card.left ||
+      left - margin > card.right ||
+      top + height + margin < card.top ||
+      top - margin > card.bottom;
+
+    if (distance >= REST_BUTTON_MIN_DISTANCE_PX && clearOfCard) {
+      restButtonEl.style.left = `${left}px`;
+      restButtonEl.style.top = `${top}px`;
+      return;
+    }
+  }
+
+  // No free spot (a very short window where the message fills the height): use the screen corner farthest
+  // from the clicks. The button may cover part of the message there, but it stays on top and clickable.
+  const corners = [
+    { left: margin, top: margin },
+    { left: window.innerWidth - width - margin, top: margin },
+    { left: margin, top: window.innerHeight - height - margin },
+    { left: window.innerWidth - width - margin, top: window.innerHeight - height - margin },
+  ];
+  const distanceFromClicks = (corner) =>
+    Math.hypot(corner.left + width / 2 - clickPoint.x, corner.top + height / 2 - clickPoint.y);
+  const farthest = corners.reduce((best, corner) =>
+    distanceFromClicks(corner) > distanceFromClicks(best) ? corner : best
+  );
+  restButtonEl.style.left = `${farthest.left}px`;
+  restButtonEl.style.top = `${farthest.top}px`;
+}
+
+// Where a click on the coin happened. Keyboard activation (Enter/Space) has no pointer position,
+// so it counts as the coin's center.
+function clickPosition(event) {
+  if (event.clientX !== 0 || event.clientY !== 0) return { x: event.clientX, y: event.clientY };
+  const rect = coinEl.getBoundingClientRect();
+  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
 }
 
 // The bonus from the highest goal reached so far (1 before the first goal).
@@ -272,12 +401,15 @@ function renderScore() {
 function createProgressSegment(milestone) {
   const segment = document.createElement("div");
   segment.className = "progress-segment";
+  const bar = document.createElement("div");
+  bar.className = "progress-bar";
   const fill = document.createElement("div");
   fill.className = "progress-fill";
   const marker = document.createElement("span");
   marker.className = "progress-marker";
 
-  segment.append(fill, marker);
+  bar.append(fill);
+  segment.append(bar, marker);
   progressTrackEl.append(segment);
   return { milestone, fill, marker };
 }
@@ -294,8 +426,9 @@ function renderProgress() {
     const reached = score >= milestone.points;
     // Short labels ("50K", "50 тыс.") so all the goals fit under the bar.
     const goalText = formatCompactNumber(milestone.points);
-    // The medal goes on its own line above the number, so labels stay narrow enough not to overlap.
-    marker.textContent = reached ? `${milestone.icon}\n${goalText}` : goalText;
+    // Medal on the first line, number on the second. The medal line stays (empty) until the goal is
+    // reached, so the numbers don't shift down when a medal appears.
+    marker.textContent = `${reached ? milestone.icon : ""}\n${goalText}`;
     marker.classList.toggle("reached", reached);
     previousGoal = milestone.points;
   });
@@ -325,7 +458,7 @@ function celebrateMilestones(previousScore, newScore) {
   const milestone = passed[passed.length - 1];
   if (milestone.victory) {
     showVictory(milestone);
-    playVictorySound();
+    playVictorySound(milestone.victory.legendary);
   } else {
     showMilestoneMessage(milestone);
     playMilestoneSound();
@@ -365,8 +498,12 @@ function showMilestoneMessage(milestone) {
 
 function showVictory(milestone) {
   const strings = TRANSLATIONS[language];
+  victoryEl.classList.toggle("is-legendary", Boolean(milestone.victory.legendary));
+  victoryIconEl.textContent = milestone.icon;
   victoryTitleEl.textContent = strings[milestone.titleKey];
-  victoryTextEl.textContent = fillTemplate(strings.victoryText, { points: formatNumber(milestone.points) });
+  victoryTextEl.textContent = fillTemplate(strings[milestone.victory.textKey], {
+    points: formatNumber(milestone.points),
+  });
   victoryBonusEl.textContent = fillTemplate(strings.milestoneBonus, { multiplier: milestone.multiplier });
   victoryCloseEl.textContent = strings.victoryButton;
 
@@ -386,7 +523,7 @@ function showVictory(milestone) {
   );
 
   if (!reducedMotionQuery.matches) {
-    for (let burst = 0; burst < VICTORY_CONFETTI_BURSTS; burst++) {
+    for (let burst = 0; burst < milestone.victory.confettiBursts; burst++) {
       victoryTimers.push(
         setTimeout(() => {
           // Never add confetti to a screen that has already closed.
@@ -442,7 +579,8 @@ function playMilestoneSound() {
   });
 }
 
-function playVictorySound() {
+// withEncore: play the fanfare a second time, an octave higher (for the legendary victory).
+function playVictorySound(withEncore) {
   const context = getAudioContext();
   if (!context) return;
 
@@ -453,6 +591,14 @@ function playVictorySound() {
   });
   const chordStart = start + VICTORY_RUN_HZ.length * 0.11 + 0.05;
   VICTORY_CHORD_HZ.forEach((frequency) => playTone(context, frequency, chordStart, 1.1));
+
+  if (!withEncore) return;
+  const encoreStart = chordStart + 0.9;
+  VICTORY_RUN_HZ.forEach((frequency, index) => {
+    playTone(context, frequency * 2, encoreStart + index * 0.11, 0.14);
+  });
+  const encoreChordStart = encoreStart + VICTORY_RUN_HZ.length * 0.11 + 0.05;
+  VICTORY_ENCORE_CHORD_HZ.forEach((frequency) => playTone(context, frequency, encoreChordStart, 1.4));
 }
 
 // Returns null when sound is off or the browser can't play generated audio.
@@ -625,11 +771,9 @@ function showFloatingPoints(event, points) {
   floating.className = "floating-plus";
   floating.textContent = `+${points}`;
 
-  // Keyboard activation (Enter/Space) has no pointer position, so use the coin's center.
-  const rect = coinEl.getBoundingClientRect();
-  const fromKeyboard = event.clientX === 0 && event.clientY === 0;
-  floating.style.left = `${fromKeyboard ? rect.left + rect.width / 2 : event.clientX}px`;
-  floating.style.top = `${fromKeyboard ? rect.top + rect.height / 2 : event.clientY}px`;
+  const position = clickPosition(event);
+  floating.style.left = `${position.x}px`;
+  floating.style.top = `${position.y}px`;
 
   document.body.appendChild(floating);
   floating.addEventListener("animationend", () => floating.remove());

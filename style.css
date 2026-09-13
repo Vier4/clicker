@@ -268,14 +268,18 @@ h1 {
 .progress-track {
   display: flex;
   gap: 6px;
-  /* Room for the goal labels under the bar: a medal line plus a number line, reserved from the start
-     so the layout doesn't jump when the first medal appears. */
-  padding-bottom: 40px;
 }
 
+/* One segment per goal: a bar, with the goal's label under its right end. */
 .progress-segment {
-  position: relative;
-  flex: 1;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  /* Never narrower than its own label, so neighbouring labels can't overlap, however many goals there are. */
+  min-width: max-content;
+}
+
+.progress-bar {
   height: 10px;
   border-radius: 999px;
   background: var(--track);
@@ -290,11 +294,9 @@ h1 {
 }
 
 .progress-marker {
-  position: absolute;
-  top: 16px;
-  right: 0;
-  /* Small enough for six goal labels ("100 тыс.", "1 млн") to fit with space between them. */
-  font-size: 0.7rem;
+  align-self: flex-end;
+  margin-top: 6px;
+  font-size: 0.75rem;
   line-height: 1.25;
   color: var(--muted);
   /* "pre" keeps the line break between medal and number, and never wraps "100 тыс." */
@@ -429,7 +431,8 @@ h1 {
 }
 
 .victory::backdrop,
-.confirm-dialog::backdrop {
+.confirm-dialog::backdrop,
+.rest-dialog::backdrop {
   background: rgba(10, 12, 30, 0.6);
   -webkit-backdrop-filter: blur(3px);
   backdrop-filter: blur(3px);
@@ -479,6 +482,28 @@ h1 {
   outline-offset: 3px;
 }
 
+/* 10,000,000 ("You beat it twice!"): a moving rainbow border and a golden glow. */
+.victory.is-legendary {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    linear-gradient(90deg, #ff7043, #ffd54a, #66bb6a, #42a5f5, #ab47bc, #ff7043) border-box;
+  background-size: 100% 100%, 300% 100%;
+  box-shadow: 0 0 40px rgba(255, 213, 74, 0.55), 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+.victory.is-legendary[open] {
+  animation:
+    milestone-pop 600ms cubic-bezier(0.2, 1.4, 0.4, 1) both,
+    legendary-border 3s linear infinite;
+}
+
+@keyframes legendary-border {
+  to {
+    background-position: 0 0, 300% 0;
+  }
+}
+
 @keyframes victory-bounce {
   0%,
   100% {
@@ -486,6 +511,103 @@ h1 {
   }
   50% {
     transform: translateY(-10px) rotate(-8deg);
+  }
+}
+
+/* "Slow down, speed demon!" screen. It fills the whole window, so clicks land on it instead of the game. */
+.rest-dialog {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 16px;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  overflow: hidden;
+}
+
+.rest-dialog[open] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: rest-fade-in 200ms ease-out both;
+}
+
+.rest-card {
+  width: min(340px, 100%);
+  padding: 24px;
+  text-align: center;
+  background: var(--surface);
+  border: 2px solid var(--accent);
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+.rest-card.is-shaking {
+  animation: rest-shake 400ms ease-in-out;
+}
+
+.rest-icon {
+  font-size: 3.5rem;
+  line-height: 1;
+}
+
+.rest-title {
+  margin: 10px 0 8px;
+  font-size: 1.5rem;
+  font-weight: 900;
+  line-height: 1.15;
+  color: var(--accent);
+}
+
+.rest-text {
+  margin: 0;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+/* script.js places it at a random spot away from where the clicks were landing. */
+.rest-button {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  padding: 12px 20px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--selected-text);
+  background: var(--selected-background);
+  border: 0;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.rest-button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+@keyframes rest-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rest-shake {
+  20% {
+    transform: translateX(-10px) rotate(-2deg);
+  }
+  40% {
+    transform: translateX(10px) rotate(2deg);
+  }
+  60% {
+    transform: translateX(-6px);
+  }
+  80% {
+    transform: translateX(6px);
   }
 }
 
@@ -575,6 +697,14 @@ h1 {
   }
 
   .victory-icon {
+    animation: none;
+  }
+
+  .victory.is-legendary[open] {
+    animation: milestone-fade-in 600ms both;
+  }
+
+  .rest-card.is-shaking {
     animation: none;
   }
 
