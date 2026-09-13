@@ -83,7 +83,8 @@ h1 {
 
 .score {
   margin: 0;
-  font-size: 1.75rem;
+  /* A little smaller on phones, so "Score: 100,000,000 ×1000" stays on one line. */
+  font-size: clamp(1.3rem, 6vw, 1.75rem);
 }
 
 #score {
@@ -356,6 +357,11 @@ h1 {
   color: var(--muted);
 }
 
+/* display: inline-block below would otherwise override the hidden attribute. */
+.milestone-bonus[hidden] {
+  display: none;
+}
+
 .milestone-bonus {
   display: inline-block;
   margin-top: 6px;
@@ -501,6 +507,162 @@ h1 {
 @keyframes legendary-border {
   to {
     background-position: 0 0, 300% 0;
+  }
+}
+
+/* 100,000,000: the ending. The whole window becomes a night sky with falling coins. */
+.victory.is-ultimate {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 24px;
+  color: #efeaff;
+  background: radial-gradient(circle at 50% 35%, #3b2a6b 0%, #1a1440 45%, #07061a 100%);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  /* Keep the falling coins inside the window. */
+  overflow: hidden;
+}
+
+.victory.is-ultimate[open] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  animation: rest-fade-in 800ms ease-out both;
+}
+
+/* Twinkling stars */
+.victory.is-ultimate::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(2px 2px at 8% 12%, #fff 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 22% 70%, #fff 50%, transparent 51%),
+    radial-gradient(2px 2px at 35% 28%, #fff3b0 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 48% 88%, #fff 50%, transparent 51%),
+    radial-gradient(2.5px 2.5px at 62% 16%, #fff 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 76% 58%, #fff3b0 50%, transparent 51%),
+    radial-gradient(2px 2px at 88% 30%, #fff 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 93% 82%, #fff 50%, transparent 51%),
+    radial-gradient(2px 2px at 14% 46%, #fff 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 56% 50%, #fff 50%, transparent 51%);
+  animation: ultimate-twinkle 2.5s ease-in-out infinite alternate;
+}
+
+/* Keep the text above the stars. */
+.victory.is-ultimate .victory-kicker,
+.victory.is-ultimate .victory-icon,
+.victory.is-ultimate .victory-title,
+.victory.is-ultimate .victory-text,
+.victory.is-ultimate .victory-actions {
+  position: relative;
+}
+
+.victory-kicker {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: #ffd54a;
+}
+
+.victory.is-ultimate .victory-icon {
+  font-size: 6rem;
+}
+
+.victory.is-ultimate .victory-title {
+  font-size: clamp(2rem, 9vw, 3.5rem);
+  /* Shining gold letters */
+  background: linear-gradient(90deg, #ffb300, #fff3b0, #ffd54a, #ffb300);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.victory.is-ultimate .victory-text {
+  max-width: 480px;
+  font-size: 1.15rem;
+  color: #e3dcff;
+}
+
+.victory.is-ultimate .victory-button {
+  color: #1a1440;
+  background: #ffd54a;
+}
+
+/* The ending reveals itself one line at a time. */
+.victory.is-ultimate[open] .victory-kicker {
+  animation: ultimate-rise 700ms ease-out both;
+}
+
+.victory.is-ultimate[open] .victory-icon {
+  animation:
+    ultimate-rise 800ms 300ms ease-out both,
+    victory-bounce 1400ms 1100ms ease-in-out infinite;
+}
+
+.victory.is-ultimate[open] .victory-title {
+  animation:
+    ultimate-rise 800ms 700ms ease-out both,
+    ultimate-shine 3s 1500ms linear infinite;
+}
+
+.victory.is-ultimate[open] .victory-text {
+  animation: ultimate-rise 800ms 1100ms ease-out both;
+}
+
+.victory.is-ultimate[open] .victory-actions {
+  animation: ultimate-rise 800ms 1500ms ease-out both;
+}
+
+/* A small gold coin, drawn like the game's coin (script.js sets each one's size and position). */
+.coin-rain {
+  position: absolute;
+  top: -3rem;
+  background: radial-gradient(circle at 35% 30%, #fff3b0, #ffd54a 45%, #e0a800);
+  border: 2px solid #c79100;
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  animation-name: coin-fall;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+}
+
+@keyframes ultimate-rise {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.92);
+  }
+}
+
+@keyframes ultimate-shine {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes ultimate-twinkle {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes coin-fall {
+  to {
+    /* rotateY spins the coin like a flipped coin while it falls. */
+    transform: translateY(calc(100vh + 6rem)) rotateY(1080deg);
   }
 }
 
@@ -705,6 +867,15 @@ h1 {
   }
 
   .rest-card.is-shaking {
+    animation: none;
+  }
+
+  .victory.is-ultimate::before,
+  .victory.is-ultimate[open] .victory-kicker,
+  .victory.is-ultimate[open] .victory-icon,
+  .victory.is-ultimate[open] .victory-title,
+  .victory.is-ultimate[open] .victory-text,
+  .victory.is-ultimate[open] .victory-actions {
     animation: none;
   }
 

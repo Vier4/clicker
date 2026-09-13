@@ -40,7 +40,7 @@ const MILESTONES = [
     icon: "💎",
     titleKey: "milestone1000000",
     multiplier: 500,
-    victory: { textKey: "victoryText", confettiBursts: 5 },
+    victory: { textKey: "victoryText", confettiBursts: 5, fanfareRounds: 1 },
   },
   {
     points: 10000000,
@@ -48,7 +48,24 @@ const MILESTONES = [
     titleKey: "milestone10000000",
     multiplier: 1000,
     // "Legendary": rainbow border, twice the confetti, and the fanfare plays twice.
-    victory: { textKey: "victoryTwiceText", confettiBursts: 10, legendary: true },
+    victory: { textKey: "victoryTwiceText", confettiBursts: 10, fanfareRounds: 2, style: "legendary" },
+  },
+  {
+    points: 100000000,
+    icon: "🌟",
+    titleKey: "milestone100000000",
+    // No new bonus here: ×1000 from 10M stays. This is the end of the game.
+    multiplier: 1000,
+    // "Ultimate": the ending. The window becomes a night sky with falling coins, and the fanfare plays three times.
+    victory: {
+      textKey: "ultimateText",
+      kickerKey: "ultimateKicker",
+      buttonKey: "ultimateButton",
+      confettiBursts: 15,
+      coinRainWaves: 8,
+      fanfareRounds: 3,
+      style: "ultimate",
+    },
   },
 ];
 // How long a celebration message stays on screen.
@@ -57,6 +74,9 @@ const CONFETTI_COLORS = ["#ffd54a", "#ffb300", "#fff3b0", "#ff7043", "#66bb6a", 
 // Victory screens fire rounds of confetti; how many rounds is set per goal in MILESTONES.
 const VICTORY_CONFETTI_PER_BURST = 80;
 const VICTORY_CONFETTI_INTERVAL_MS = 600;
+// The final ending also rains coins, in waves.
+const COIN_RAIN_PER_WAVE = 20;
+const COIN_RAIN_INTERVAL_MS = 900;
 // Players are usually tapping fast when the victory screen opens, so its button waits a moment
 // before it can be pressed; a stray tap can't close the screen before it's seen.
 const VICTORY_CLOSE_DELAY_MS = 1500;
@@ -74,6 +94,8 @@ const VICTORY_RUN_HZ = [523, 659, 784, 1047, 784, 1047];
 const VICTORY_CHORD_HZ = [1047, 1319, 1568];
 // Legendary victory: the run again an octave higher, ending on a bigger chord (C6 E6 G6 C7).
 const VICTORY_ENCORE_CHORD_HZ = [1047, 1319, 1568, 2093];
+// The final ending: a huge chord spanning two octaves (C5 up to C7).
+const VICTORY_FINAL_CHORD_HZ = [523, 659, 784, 1047, 1319, 1568, 2093];
 
 const TRANSLATIONS = {
   en: {
@@ -109,6 +131,10 @@ const TRANSLATIONS = {
     restTitle: "Slow down, speed demon!",
     restText: "More than {speed} clicks a second for {seconds} seconds straight. Your finger needs a rest… or is that a robot? 🤖",
     restButton: "I'm rested 😌",
+    milestone100000000: "You did the impossible!",
+    ultimateKicker: "✨ The end ✨",
+    ultimateText: "{points} points. Almost nobody ever gets this far. The coin bows to you, Legend of the Coin! 👑",
+    ultimateButton: "Keep clicking forever",
   },
   ru: {
     pageTitle: "Кликер монет",
@@ -144,6 +170,10 @@ const TRANSLATIONS = {
     restTitle: "Помедленнее, торопыга!",
     restText: "Больше {speed} кликов в секунду {seconds} секунд подряд. Пальцу нужен отдых… или это робот? 🤖",
     restButton: "Отдых окончен 😌",
+    milestone100000000: "Вы сделали невозможное!",
+    ultimateKicker: "✨ Конец игры ✨",
+    ultimateText: "{points} очков. Так далеко почти никто не доходит. Монета склоняется перед вами, Легенда монеты! 👑",
+    ultimateButton: "Кликать вечно",
   },
 };
 
@@ -164,6 +194,7 @@ const restDialogEl = document.getElementById("rest-dialog");
 const restCardEl = document.getElementById("rest-card");
 const restTextEl = document.getElementById("rest-text");
 const restButtonEl = document.getElementById("rest-button");
+const victoryKickerEl = document.getElementById("victory-kicker");
 const victoryIconEl = document.getElementById("victory-icon");
 const victoryTitleEl = document.getElementById("victory-title");
 const victoryTextEl = document.getElementById("victory-text");
@@ -372,6 +403,12 @@ function currentMultiplier() {
   return reached.length > 0 ? reached[reached.length - 1].multiplier : 1;
 }
 
+// Whether reaching this goal gives a bigger bonus than the goal before it.
+function raisesMultiplier(milestone) {
+  const index = MILESTONES.indexOf(milestone);
+  return index === 0 || milestone.multiplier > MILESTONES[index - 1].multiplier;
+}
+
 // How grown the coin is right now: 0 = starting size, 1 = full size.
 function coinGrowth() {
   // A single click (speed 1) keeps the starting size; growth starts from the second click in a second.
@@ -458,7 +495,7 @@ function celebrateMilestones(previousScore, newScore) {
   const milestone = passed[passed.length - 1];
   if (milestone.victory) {
     showVictory(milestone);
-    playVictorySound(milestone.victory.legendary);
+    playVictorySound(milestone.victory.fanfareRounds);
   } else {
     showMilestoneMessage(milestone);
     playMilestoneSound();
@@ -480,10 +517,13 @@ function showMilestoneMessage(milestone) {
   const text = document.createElement("span");
   text.className = "milestone-text";
   text.textContent = fillTemplate(strings.milestoneReached, { points: formatNumber(milestone.points) });
-  const bonus = document.createElement("span");
-  bonus.className = "milestone-bonus";
-  bonus.textContent = fillTemplate(strings.milestoneBonus, { multiplier: milestone.multiplier });
-  card.append(icon, title, text, bonus);
+  card.append(icon, title, text);
+  if (raisesMultiplier(milestone)) {
+    const bonus = document.createElement("span");
+    bonus.className = "milestone-bonus";
+    bonus.textContent = fillTemplate(strings.milestoneBonus, { multiplier: milestone.multiplier });
+    card.append(bonus);
+  }
 
   // Replace any message that is still showing.
   milestoneLayerEl.replaceChildren(card);
@@ -498,14 +538,20 @@ function showMilestoneMessage(milestone) {
 
 function showVictory(milestone) {
   const strings = TRANSLATIONS[language];
-  victoryEl.classList.toggle("is-legendary", Boolean(milestone.victory.legendary));
+  const { victory } = milestone;
+  victoryEl.classList.toggle("is-legendary", victory.style === "legendary");
+  victoryEl.classList.toggle("is-ultimate", victory.style === "ultimate");
+  victoryKickerEl.hidden = !victory.kickerKey;
+  victoryKickerEl.textContent = victory.kickerKey ? strings[victory.kickerKey] : "";
   victoryIconEl.textContent = milestone.icon;
   victoryTitleEl.textContent = strings[milestone.titleKey];
-  victoryTextEl.textContent = fillTemplate(strings[milestone.victory.textKey], {
+  victoryTextEl.textContent = fillTemplate(strings[victory.textKey], {
     points: formatNumber(milestone.points),
   });
+  // Only mention the bonus when this goal actually raises it.
+  victoryBonusEl.hidden = !raisesMultiplier(milestone);
   victoryBonusEl.textContent = fillTemplate(strings.milestoneBonus, { multiplier: milestone.multiplier });
-  victoryCloseEl.textContent = strings.victoryButton;
+  victoryCloseEl.textContent = strings[victory.buttonKey ?? "victoryButton"];
 
   // Clear any goal message still showing; the victory screen takes over.
   clearTimeout(messageTimer);
@@ -531,6 +577,29 @@ function showVictory(milestone) {
         }, burst * VICTORY_CONFETTI_INTERVAL_MS)
       );
     }
+    for (let wave = 0; wave < (victory.coinRainWaves ?? 0); wave++) {
+      victoryTimers.push(
+        setTimeout(() => {
+          if (victoryEl.open) launchCoinRain(COIN_RAIN_PER_WAVE);
+        }, wave * COIN_RAIN_INTERVAL_MS)
+      );
+    }
+  }
+}
+
+// Coins falling from the top of the final ending screen.
+function launchCoinRain(count) {
+  for (let i = 0; i < count; i++) {
+    const coin = document.createElement("span");
+    coin.className = "coin-rain";
+    const size = randomBetween(16, 36);
+    coin.style.width = `${size}px`;
+    coin.style.height = `${size}px`;
+    coin.style.left = `${randomBetween(0, 100)}%`;
+    coin.style.animationDuration = `${randomBetween(2200, 4200)}ms`;
+    coin.style.animationDelay = `${randomBetween(0, 800)}ms`;
+    coin.addEventListener("animationend", () => coin.remove());
+    victoryEl.append(coin);
   }
 }
 
@@ -538,7 +607,7 @@ function showVictory(milestone) {
 function stopVictoryEffects() {
   victoryTimers.forEach(clearTimeout);
   victoryTimers = [];
-  victoryEl.querySelectorAll(".confetti").forEach((piece) => piece.remove());
+  victoryEl.querySelectorAll(".confetti, .coin-rain").forEach((piece) => piece.remove());
 }
 
 function launchConfetti(count, container = milestoneLayerEl) {
@@ -579,26 +648,30 @@ function playMilestoneSound() {
   });
 }
 
-// withEncore: play the fanfare a second time, an octave higher (for the legendary victory).
-function playVictorySound(withEncore) {
+// rounds: how many times the fanfare plays (1 for 1M, 2 for 10M, 3 for 100M). Rounds after the first are
+// an octave higher, and the last round ends on a bigger, longer chord.
+function playVictorySound(rounds) {
   const context = getAudioContext();
   if (!context) return;
 
+  const lastChords = [VICTORY_CHORD_HZ, VICTORY_ENCORE_CHORD_HZ, VICTORY_FINAL_CHORD_HZ];
+  const lastChordSeconds = [1.1, 1.4, 2.4];
   // Start just after the click sound so the two don't blur together.
-  const start = context.currentTime + 0.12;
-  VICTORY_RUN_HZ.forEach((frequency, index) => {
-    playTone(context, frequency, start + index * 0.11, 0.14);
-  });
-  const chordStart = start + VICTORY_RUN_HZ.length * 0.11 + 0.05;
-  VICTORY_CHORD_HZ.forEach((frequency) => playTone(context, frequency, chordStart, 1.1));
+  let start = context.currentTime + 0.12;
 
-  if (!withEncore) return;
-  const encoreStart = chordStart + 0.9;
-  VICTORY_RUN_HZ.forEach((frequency, index) => {
-    playTone(context, frequency * 2, encoreStart + index * 0.11, 0.14);
-  });
-  const encoreChordStart = encoreStart + VICTORY_RUN_HZ.length * 0.11 + 0.05;
-  VICTORY_ENCORE_CHORD_HZ.forEach((frequency) => playTone(context, frequency, encoreChordStart, 1.4));
+  for (let round = 0; round < rounds; round++) {
+    const octave = round === 0 ? 1 : 2;
+    VICTORY_RUN_HZ.forEach((frequency, index) => {
+      playTone(context, frequency * octave, start + index * 0.11, 0.14);
+    });
+
+    const chordStart = start + VICTORY_RUN_HZ.length * 0.11 + 0.05;
+    const isLastRound = round === rounds - 1;
+    const chord = isLastRound ? lastChords[rounds - 1] : VICTORY_CHORD_HZ;
+    const chordSeconds = isLastRound ? lastChordSeconds[rounds - 1] : 1.1;
+    chord.forEach((frequency) => playTone(context, frequency, chordStart, chordSeconds));
+    start = chordStart + 0.9;
+  }
 }
 
 // Returns null when sound is off or the browser can't play generated audio.
@@ -642,8 +715,10 @@ function formatNumber(value) {
   return value.toLocaleString(language);
 }
 
+// Short goal labels: "1K", "100M". Always the K/M style, even in Russian, because Russian's own short forms
+// ("100 тыс.", "100 млн") are too wide for eight goals under the bar on a phone.
 function formatCompactNumber(value) {
-  return new Intl.NumberFormat(language, { notation: "compact" }).format(value);
+  return new Intl.NumberFormat("en", { notation: "compact" }).format(value);
 }
 
 // Fills "{name}" placeholders in a translated string.

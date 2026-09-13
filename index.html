@@ -19,7 +19,7 @@
   </script>
   <!-- "?v=" makes browsers download fresh files after an update instead of using old saved copies.
        Raise the number (here and on script.js at the bottom) whenever style.css or script.js changes. -->
-  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
   <div class="toolbar">
@@ -78,11 +78,13 @@
 
   <!-- Opens when the final goal is reached. script.js fills in the text. -->
   <dialog id="victory" class="victory" aria-labelledby="victory-title" aria-describedby="victory-text">
+    <!-- Only the final ending shows this line ("The end"). -->
+    <p id="victory-kicker" class="victory-kicker" hidden></p>
     <div id="victory-icon" class="victory-icon" aria-hidden="true"></div>
     <h2 id="victory-title" class="victory-title"></h2>
     <p id="victory-text" class="victory-text"></p>
     <span id="victory-bonus" class="milestone-bonus"></span>
-    <div>
+    <div class="victory-actions">
       <button id="victory-close" class="victory-button" type="button"></button>
     </div>
   </dialog>
@@ -112,6 +114,6 @@
   <!-- Goal celebration messages appear here; screen readers announce them. -->
   <div id="milestone-layer" class="milestone-layer" role="status" aria-live="polite"></div>
 
-  <script src="script.js?v=8"></script>
+  <script src="script.js?v=9"></script>
 </body>
 </html>
