@@ -39,10 +39,14 @@
 html {
   /* The page scrolls here, which lets body clip the coin when it grows past the window edges. */
   overflow: auto;
+  /* Fast taps on iPhone would trigger Safari's double-tap zoom. This turns that off; pinch-zoom still works. */
+  touch-action: manipulation;
 }
 
 body {
   margin: 0;
+  /* "hidden" is a fallback for older Safari (before iOS 16), which doesn't support "clip". */
+  overflow: hidden;
   overflow: clip;
   min-height: 100vh;
   /* Top padding keeps the game clear of the toolbar on short screens. */
@@ -53,7 +57,10 @@ body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   background: var(--background);
   color: var(--text);
+  -webkit-user-select: none;
   user-select: none;
+  /* No "Copy / Look Up" pop-up on iPhone when a tap is held. */
+  -webkit-touch-callout: none;
 }
 
 .game {
