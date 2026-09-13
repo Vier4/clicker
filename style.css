@@ -1,0 +1,386 @@
+* {
+  box-sizing: border-box;
+}
+
+/* Theme colors. The coin itself stays gold in both themes. */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+  --background: radial-gradient(circle at top, #fffaf0, #eee2c8);
+  --text: #1f2233;
+  --accent: #946300;
+  --control-border: rgba(31, 34, 51, 0.3);
+  --control-hover: rgba(31, 34, 51, 0.08);
+  --selected-background: #946300;
+  --selected-text: #ffffff;
+  --coin-shadow: rgba(80, 55, 0, 0.3);
+  --focus-ring: #2f6fed;
+  --surface: #ffffff;
+  --muted: #5a5f73;
+  --track: rgba(31, 34, 51, 0.12);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: radial-gradient(circle at top, #2b2f4a, #14162a);
+  --text: #f5f5f5;
+  --accent: #ffd54a;
+  --control-border: rgba(255, 255, 255, 0.35);
+  --control-hover: rgba(255, 255, 255, 0.1);
+  --selected-background: #ffd54a;
+  --selected-text: #14162a;
+  --coin-shadow: rgba(0, 0, 0, 0.45);
+  --focus-ring: #8ab4ff;
+  --surface: #23263f;
+  --muted: #b8bccf;
+  --track: rgba(255, 255, 255, 0.15);
+}
+
+html {
+  /* The page scrolls here, which lets body clip the coin when it grows past the window edges. */
+  overflow: auto;
+}
+
+body {
+  margin: 0;
+  overflow: clip;
+  min-height: 100vh;
+  /* Top padding keeps the game clear of the toolbar on short screens. */
+  padding: 64px 16px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--background);
+  color: var(--text);
+  user-select: none;
+}
+
+.game {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  text-align: center;
+}
+
+h1 {
+  margin: 0;
+  font-size: 2.5rem;
+  letter-spacing: 1px;
+}
+
+.score {
+  margin: 0;
+  font-size: 1.75rem;
+}
+
+#score {
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Holds the coin at normal speeds; at very high speeds it grows past this and covers the title. */
+.coin-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 280px;
+  height: 280px;
+}
+
+.coin {
+  /* --speed-scale is set by script.js from the click speed; --press-scale is hover/press feedback. */
+  --speed-scale: 1;
+  --press-scale: 1;
+  position: relative;
+  width: 120px;
+  height: 120px;
+  border: 5px solid #c79100;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff3b0, #ffd54a 45%, #e0a800);
+  box-shadow: 0 6px 18px var(--coin-shadow), inset 0 -4px 8px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  transform: scale(calc(var(--speed-scale) * var(--press-scale)));
+  transition: transform 120ms ease-out;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.coin:hover {
+  --press-scale: 1.04;
+}
+
+.coin:active {
+  --press-scale: 0.94;
+}
+
+.coin:focus-visible,
+.toolbar-button:focus-visible,
+.reset:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.coin:focus-visible {
+  outline-offset: 4px;
+}
+
+.coin-face {
+  font-size: 3rem;
+  font-weight: 800;
+  color: #a87600;
+  text-shadow: 0 2px 0 #fff3b0;
+  pointer-events: none;
+}
+
+/* "+1" that floats up from the click position */
+.floating-plus {
+  position: fixed;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--accent);
+  pointer-events: none;
+  animation: float-up 700ms ease-out forwards;
+}
+
+@keyframes float-up {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -150%);
+  }
+}
+
+.toolbar {
+  position: fixed;
+  /* Stay above the coin when it grows huge. */
+  z-index: 10;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.language-switcher {
+  display: flex;
+  gap: 4px;
+}
+
+.toolbar-button,
+.reset {
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.toolbar-button:hover,
+.reset:hover {
+  background: var(--control-hover);
+}
+
+.toolbar-button {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.language-option[aria-pressed="true"] {
+  color: var(--selected-text);
+  background: var(--selected-background);
+  border-color: var(--selected-background);
+}
+
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  padding: 0;
+}
+
+:root[data-theme="light"] .icon-sun,
+:root[data-theme="dark"] .icon-moon {
+  display: none;
+}
+
+.reset {
+  padding: 8px 20px;
+  font-size: 1rem;
+}
+
+/* Progress toward the score goals */
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* Wide enough for the longest line ("Следующая цель: 5 000 · осталось 4 000") on one line. */
+  width: 340px;
+  max-width: 100%;
+}
+
+.progress-text {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-track {
+  display: flex;
+  gap: 6px;
+  /* Room for the goal labels under the bar. */
+  padding-bottom: 22px;
+}
+
+.progress-segment {
+  position: relative;
+  flex: 1;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--track);
+}
+
+.progress-fill {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ffd54a, #e0a800);
+  transition: width 200ms ease-out;
+}
+
+.progress-marker {
+  position: absolute;
+  top: 16px;
+  right: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-marker.reached {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* Goal celebration message */
+.milestone-layer {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  /* Above the coin and toolbar, but never blocks clicks on the coin. */
+  z-index: 20;
+  pointer-events: none;
+}
+
+.milestone-card {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-width: 240px;
+  max-width: calc(100vw - 32px);
+  padding: 16px 28px;
+  text-align: center;
+  background: var(--surface);
+  border: 2px solid var(--accent);
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  animation: milestone-pop 450ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.milestone-card.is-leaving {
+  animation: milestone-leave 300ms ease-in forwards;
+}
+
+.milestone-icon {
+  font-size: 2.75rem;
+  line-height: 1.1;
+}
+
+.milestone-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.milestone-text {
+  font-size: 1rem;
+  color: var(--muted);
+}
+
+@keyframes milestone-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.5) rotate(-6deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes milestone-leave {
+  to {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.95);
+  }
+}
+
+.confetti {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 12px;
+  border-radius: 2px;
+  animation: confetti-burst 1200ms ease-out forwards;
+}
+
+/* --dx, --dy and --spin are set per piece by script.js. */
+@keyframes confetti-burst {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(0);
+  }
+  60% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--spin));
+  }
+  100% {
+    opacity: 0;
+    /* Drift down a little at the end, like it's falling. */
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy) + 80px)) rotate(var(--spin));
+  }
+}
+
+/* For people who turn off animations: just fade the message in and out (script.js skips the confetti). */
+@media (prefers-reduced-motion: reduce) {
+  .milestone-card {
+    animation-name: milestone-fade-in;
+  }
+
+  .milestone-card.is-leaving {
+    animation-name: milestone-fade-out;
+  }
+
+  @keyframes milestone-fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes milestone-fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+}
