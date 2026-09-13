@@ -55,6 +55,7 @@
 
     <p class="score">
       <span data-i18n="score">Score:</span> <span id="score">0</span>
+      <span id="multiplier" class="multiplier" hidden></span>
     </p>
 
     <div class="progress">
@@ -72,6 +73,17 @@
 
     <button id="reset" class="reset" type="button" data-i18n="reset">Reset</button>
   </main>
+
+  <!-- Opens when the final goal is reached. script.js fills in the text. -->
+  <dialog id="victory" class="victory" aria-labelledby="victory-title" aria-describedby="victory-text">
+    <div class="victory-icon" aria-hidden="true">💎</div>
+    <h2 id="victory-title" class="victory-title"></h2>
+    <p id="victory-text" class="victory-text"></p>
+    <span id="victory-bonus" class="milestone-bonus"></span>
+    <div>
+      <button id="victory-close" class="victory-button" type="button"></button>
+    </div>
+  </dialog>
 
   <!-- Goal celebration messages appear here; screen readers announce them. -->
   <div id="milestone-layer" class="milestone-layer" role="status" aria-live="polite"></div>

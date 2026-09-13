@@ -88,6 +88,24 @@ h1 {
   font-variant-numeric: tabular-nums;
 }
 
+/* The goal bonus next to the score, e.g. "×5". */
+.multiplier {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 2px 10px;
+  font-size: 1rem;
+  font-weight: 800;
+  vertical-align: middle;
+  color: var(--selected-text);
+  background: var(--selected-background);
+  border-radius: 999px;
+}
+
+/* display: inline-block above would otherwise override the hidden attribute. */
+.multiplier[hidden] {
+  display: none;
+}
+
 /* Holds the coin at normal speeds; at very high speeds it grows past this and covers the title. */
 .coin-stage {
   display: flex;
@@ -246,8 +264,9 @@ h1 {
 .progress-track {
   display: flex;
   gap: 6px;
-  /* Room for the goal labels under the bar. */
-  padding-bottom: 22px;
+  /* Room for the goal labels under the bar: a medal line plus a number line, reserved from the start
+     so the layout doesn't jump when the first medal appears. */
+  padding-bottom: 40px;
 }
 
 .progress-segment {
@@ -270,9 +289,13 @@ h1 {
   position: absolute;
   top: 16px;
   right: 0;
-  font-size: 0.8rem;
+  /* Small enough for six goal labels ("100 тыс.", "1 млн") to fit with space between them. */
+  font-size: 0.7rem;
+  line-height: 1.25;
   color: var(--muted);
-  white-space: nowrap;
+  /* "pre" keeps the line break between medal and number, and never wraps "100 тыс." */
+  white-space: pre;
+  text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
@@ -327,6 +350,17 @@ h1 {
   color: var(--muted);
 }
 
+.milestone-bonus {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 12px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--selected-text);
+  background: var(--selected-background);
+  border-radius: 999px;
+}
+
 @keyframes milestone-pop {
   from {
     opacity: 0;
@@ -372,8 +406,94 @@ h1 {
   }
 }
 
+/* "You beat the game!" screen */
+.victory {
+  width: min(420px, calc(100vw - 32px));
+  padding: 32px 28px 28px;
+  text-align: center;
+  color: var(--text);
+  background: var(--surface);
+  border: 3px solid var(--accent);
+  border-radius: 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  /* Let the confetti fly outside the box. */
+  overflow: visible;
+}
+
+.victory[open] {
+  animation: milestone-pop 600ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.victory::backdrop {
+  background: rgba(10, 12, 30, 0.6);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
+.victory-icon {
+  font-size: 4.5rem;
+  line-height: 1;
+  animation: victory-bounce 1400ms ease-in-out infinite;
+}
+
+.victory-title {
+  margin: 14px 0 8px;
+  /* Shrinks on phones so "Вы прошли игру!" stays on one line. */
+  font-size: clamp(1.5rem, 7vw, 2rem);
+  font-weight: 900;
+  line-height: 1.15;
+  color: var(--accent);
+}
+
+.victory-text {
+  margin: 0 0 6px;
+  font-size: 1.05rem;
+  color: var(--muted);
+}
+
+.victory-button {
+  margin-top: 22px;
+  padding: 12px 28px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--selected-text);
+  background: var(--selected-background);
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: opacity 200ms ease-out;
+}
+
+.victory-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.victory-button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+@keyframes victory-bounce {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  50% {
+    transform: translateY(-10px) rotate(-8deg);
+  }
+}
+
 /* For people who turn off animations: just fade the message in and out (script.js skips the confetti). */
 @media (prefers-reduced-motion: reduce) {
+  .victory[open] {
+    animation-name: milestone-fade-in;
+  }
+
+  .victory-icon {
+    animation: none;
+  }
+
   .milestone-card {
     animation-name: milestone-fade-in;
   }

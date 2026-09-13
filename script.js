@@ -14,18 +14,31 @@ const MAX_COIN_SCALE = 6;
 const GROWTH_CURVE = 1.5;
 // Below full size, every this many clicks per second adds +1 to each click: 1–2 → +1, 3–5 → +2, 6–8 → +3, 9 → +4.
 const CLICKS_PER_BONUS_POINT = 3;
-// Points per click when the coin is at its biggest (MAX_SPEED or faster). This is the most a click can give.
+// Points per click when the coin is at its biggest (MAX_SPEED or faster), before the goal bonus below.
 const MAX_POINTS_PER_CLICK = 5;
 
-// Score goals, in order. Reaching one shows a celebration message; the progress bar has one segment per goal.
+// Score goals, in order. Reaching one shows a celebration message and multiplies every click's points
+// from then on. Each multiplier replaces the previous one (they don't stack); this keeps the big goals reachable.
+// The progress bar has one segment per goal.
 const MILESTONES = [
-  { points: 100, icon: "🥉", titleKey: "milestone100", confetti: 30 },
-  { points: 1000, icon: "🥈", titleKey: "milestone1000", confetti: 50 },
-  { points: 5000, icon: "🏆", titleKey: "milestone5000", confetti: 90 },
+  { points: 100, icon: "🥉", titleKey: "milestone100", multiplier: 2, confetti: 30 },
+  { points: 1000, icon: "🥈", titleKey: "milestone1000", multiplier: 5, confetti: 50 },
+  { points: 5000, icon: "🥇", titleKey: "milestone5000", multiplier: 20, confetti: 90 },
+  { points: 50000, icon: "🏆", titleKey: "milestone50000", multiplier: 50, confetti: 120 },
+  { points: 100000, icon: "👑", titleKey: "milestone100000", multiplier: 300, confetti: 160 },
+  // The final goal: instead of the usual message, it opens the "You beat the game!" screen.
+  { points: 1000000, icon: "💎", titleKey: "milestone1000000", multiplier: 500, victory: true },
 ];
 // How long a celebration message stays on screen.
 const MESSAGE_DURATION_MS = 3000;
 const CONFETTI_COLORS = ["#ffd54a", "#ffb300", "#fff3b0", "#ff7043", "#66bb6a", "#42a5f5"];
+// The victory screen fires several rounds of confetti.
+const VICTORY_CONFETTI_BURSTS = 5;
+const VICTORY_CONFETTI_PER_BURST = 80;
+const VICTORY_CONFETTI_INTERVAL_MS = 600;
+// Players are usually tapping fast when the victory screen opens, so its button waits a moment
+// before it can be pressed; a stray tap can't close the screen before it's seen.
+const VICTORY_CLOSE_DELAY_MS = 1500;
 
 // Sounds are generated in code (no audio files).
 const SOUND_VOLUME = 0.12;
@@ -35,6 +48,9 @@ const CLICK_NOTE_HZ = 988;
 const CLICK_PITCH_RISE_SEMITONES = 7;
 // Goal jingle: C6, E6, G6, C7.
 const MILESTONE_NOTES_HZ = [1047, 1319, 1568, 2093];
+// Victory fanfare: a rising run (C5 E5 G5 C6 G5 C6), then a held C major chord (C6 E6 G6).
+const VICTORY_RUN_HZ = [523, 659, 784, 1047, 784, 1047];
+const VICTORY_CHORD_HZ = [1047, 1319, 1568];
 
 const TRANSLATIONS = {
   en: {
@@ -52,8 +68,15 @@ const TRANSLATIONS = {
     allGoalsReached: "All goals reached!",
     milestone100: "Nice start!",
     milestone1000: "Coin master!",
-    milestone5000: "Legendary clicker!",
+    milestone5000: "Gold clicker!",
+    milestone50000: "Coin tycoon!",
+    milestone100000: "Coin king!",
     milestoneReached: "You reached {points} points",
+    milestoneBonus: "Every click is now ×{multiplier}!",
+    multiplierLabel: "Points multiplier",
+    milestone1000000: "You beat the game!",
+    victoryText: "{points} points! You're the ultimate Coin Clicker champion.",
+    victoryButton: "Keep clicking",
   },
   ru: {
     pageTitle: "Кликер монет",
@@ -70,12 +93,20 @@ const TRANSLATIONS = {
     allGoalsReached: "Все цели достигнуты!",
     milestone100: "Отличное начало!",
     milestone1000: "Мастер монет!",
-    milestone5000: "Легендарный кликер!",
+    milestone5000: "Золотой кликер!",
+    milestone50000: "Монетный магнат!",
+    milestone100000: "Король монет!",
     milestoneReached: "Вы набрали {points} очков",
+    milestoneBonus: "Теперь каждый клик ×{multiplier}!",
+    multiplierLabel: "Множитель очков",
+    milestone1000000: "Вы прошли игру!",
+    victoryText: "{points} очков! Вы — абсолютный чемпион кликера монет.",
+    victoryButton: "Кликать дальше",
   },
 };
 
 const scoreEl = document.getElementById("score");
+const multiplierEl = document.getElementById("multiplier");
 const coinEl = document.getElementById("coin");
 const resetEl = document.getElementById("reset");
 const themeToggleEl = document.getElementById("theme-toggle");
@@ -83,6 +114,11 @@ const soundToggleEl = document.getElementById("sound-toggle");
 const progressTextEl = document.getElementById("progress-text");
 const progressTrackEl = document.getElementById("progress-track");
 const milestoneLayerEl = document.getElementById("milestone-layer");
+const victoryEl = document.getElementById("victory");
+const victoryTitleEl = document.getElementById("victory-title");
+const victoryTextEl = document.getElementById("victory-text");
+const victoryBonusEl = document.getElementById("victory-bonus");
+const victoryCloseEl = document.getElementById("victory-close");
 const languageSwitcherEl = document.querySelector(".language-switcher");
 const languageButtons = document.querySelectorAll("[data-lang]");
 const systemDarkQuery = matchMedia("(prefers-color-scheme: dark)");
@@ -98,6 +134,7 @@ let audioContext = null;
 let recentClicks = [];
 let coinSizeFrame = null;
 let messageTimer = null;
+let victoryTimers = [];
 applyLanguage();
 applyTheme();
 applySound();
@@ -105,7 +142,7 @@ renderScore();
 
 coinEl.addEventListener("click", (event) => {
   recentClicks.push(performance.now());
-  const points = pointsForSpeed(currentSpeed());
+  const points = pointsForSpeed(currentSpeed()) * currentMultiplier();
   const previousScore = score;
 
   score += points;
@@ -151,6 +188,15 @@ soundToggleEl.addEventListener("click", () => {
   playClickSound(0);
 });
 
+victoryCloseEl.addEventListener("click", () => {
+  victoryEl.close();
+  // Clean up right away: the browser's "close" event can arrive later, and until then confetti kept coming.
+  stopVictoryEffects();
+});
+
+// Also covers closing the victory screen with the Escape key.
+victoryEl.addEventListener("close", stopVictoryEffects);
+
 // Until the player picks a theme, keep following the system setting.
 systemDarkQuery.addEventListener("change", (event) => {
   if (hasSavedTheme()) return;
@@ -170,6 +216,12 @@ function pointsForSpeed(speed) {
   return Math.min(1 + Math.floor(speed / CLICKS_PER_BONUS_POINT), MAX_POINTS_PER_CLICK - 1);
 }
 
+// The bonus from the highest goal reached so far (1 before the first goal).
+function currentMultiplier() {
+  const reached = MILESTONES.filter((milestone) => score >= milestone.points);
+  return reached.length > 0 ? reached[reached.length - 1].multiplier : 1;
+}
+
 // How grown the coin is right now: 0 = starting size, 1 = full size.
 function coinGrowth() {
   // A single click (speed 1) keeps the starting size; growth starts from the second click in a second.
@@ -187,6 +239,12 @@ function updateCoinSize() {
 
 function renderScore() {
   scoreEl.textContent = score.toLocaleString(language);
+
+  const multiplier = currentMultiplier();
+  multiplierEl.hidden = multiplier === 1;
+  multiplierEl.textContent = `×${multiplier}`;
+  multiplierEl.title = TRANSLATIONS[language].multiplierLabel;
+
   renderProgress();
 }
 
@@ -213,8 +271,10 @@ function renderProgress() {
     fill.style.width = `${Math.min(Math.max(share, 0), 1) * 100}%`;
 
     const reached = score >= milestone.points;
-    const goalText = formatNumber(milestone.points);
-    marker.textContent = reached ? `${milestone.icon} ${goalText}` : goalText;
+    // Short labels ("50K", "50 тыс.") so all the goals fit under the bar.
+    const goalText = formatCompactNumber(milestone.points);
+    // The medal goes on its own line above the number, so labels stay narrow enough not to overlap.
+    marker.textContent = reached ? `${milestone.icon}\n${goalText}` : goalText;
     marker.classList.toggle("reached", reached);
     previousGoal = milestone.points;
   });
@@ -239,8 +299,14 @@ function celebrateMilestones(previousScore, newScore) {
   const passed = MILESTONES.filter(
     (milestone) => previousScore < milestone.points && newScore >= milestone.points
   );
-  if (passed.length > 0) {
-    showMilestoneMessage(passed[passed.length - 1]);
+  if (passed.length === 0) return;
+
+  const milestone = passed[passed.length - 1];
+  if (milestone.victory) {
+    showVictory(milestone);
+    playVictorySound();
+  } else {
+    showMilestoneMessage(milestone);
     playMilestoneSound();
   }
 }
@@ -260,7 +326,10 @@ function showMilestoneMessage(milestone) {
   const text = document.createElement("span");
   text.className = "milestone-text";
   text.textContent = fillTemplate(strings.milestoneReached, { points: formatNumber(milestone.points) });
-  card.append(icon, title, text);
+  const bonus = document.createElement("span");
+  bonus.className = "milestone-bonus";
+  bonus.textContent = fillTemplate(strings.milestoneBonus, { multiplier: milestone.multiplier });
+  card.append(icon, title, text, bonus);
 
   // Replace any message that is still showing.
   milestoneLayerEl.replaceChildren(card);
@@ -273,7 +342,48 @@ function showMilestoneMessage(milestone) {
   }, MESSAGE_DURATION_MS);
 }
 
-function launchConfetti(count) {
+function showVictory(milestone) {
+  const strings = TRANSLATIONS[language];
+  victoryTitleEl.textContent = strings[milestone.titleKey];
+  victoryTextEl.textContent = fillTemplate(strings.victoryText, { points: formatNumber(milestone.points) });
+  victoryBonusEl.textContent = fillTemplate(strings.milestoneBonus, { multiplier: milestone.multiplier });
+  victoryCloseEl.textContent = strings.victoryButton;
+
+  // Clear any goal message still showing; the victory screen takes over.
+  clearTimeout(messageTimer);
+  milestoneLayerEl.replaceChildren();
+  // Clear anything left from an earlier victory screen.
+  stopVictoryEffects();
+  victoryEl.showModal();
+
+  victoryCloseEl.disabled = true;
+  victoryTimers.push(
+    setTimeout(() => {
+      victoryCloseEl.disabled = false;
+      victoryCloseEl.focus();
+    }, VICTORY_CLOSE_DELAY_MS)
+  );
+
+  if (!reducedMotionQuery.matches) {
+    for (let burst = 0; burst < VICTORY_CONFETTI_BURSTS; burst++) {
+      victoryTimers.push(
+        setTimeout(() => {
+          // Never add confetti to a screen that has already closed.
+          if (victoryEl.open) launchConfetti(VICTORY_CONFETTI_PER_BURST, victoryEl);
+        }, burst * VICTORY_CONFETTI_INTERVAL_MS)
+      );
+    }
+  }
+}
+
+// Stops pending confetti rounds and the button delay, and removes confetti from the victory screen.
+function stopVictoryEffects() {
+  victoryTimers.forEach(clearTimeout);
+  victoryTimers = [];
+  victoryEl.querySelectorAll(".confetti").forEach((piece) => piece.remove());
+}
+
+function launchConfetti(count, container = milestoneLayerEl) {
   for (let i = 0; i < count; i++) {
     const piece = document.createElement("span");
     piece.className = "confetti";
@@ -283,7 +393,7 @@ function launchConfetti(count) {
     piece.style.setProperty("--spin", `${randomBetween(-540, 540)}deg`);
     piece.style.animationDelay = `${randomBetween(0, 120)}ms`;
     piece.addEventListener("animationend", () => piece.remove());
-    milestoneLayerEl.append(piece);
+    container.append(piece);
   }
 }
 
@@ -309,6 +419,19 @@ function playMilestoneSound() {
     const isLastNote = index === MILESTONE_NOTES_HZ.length - 1;
     playTone(context, frequency, start + index * 0.09, isLastNote ? 0.4 : 0.14);
   });
+}
+
+function playVictorySound() {
+  const context = getAudioContext();
+  if (!context) return;
+
+  // Start just after the click sound so the two don't blur together.
+  const start = context.currentTime + 0.12;
+  VICTORY_RUN_HZ.forEach((frequency, index) => {
+    playTone(context, frequency, start + index * 0.11, 0.14);
+  });
+  const chordStart = start + VICTORY_RUN_HZ.length * 0.11 + 0.05;
+  VICTORY_CHORD_HZ.forEach((frequency) => playTone(context, frequency, chordStart, 1.1));
 }
 
 // Returns null when sound is off or the browser can't play generated audio.
@@ -350,6 +473,10 @@ function randomBetween(min, max) {
 
 function formatNumber(value) {
   return value.toLocaleString(language);
+}
+
+function formatCompactNumber(value) {
+  return new Intl.NumberFormat(language, { notation: "compact" }).format(value);
 }
 
 // Fills "{name}" placeholders in a translated string.
